@@ -25,7 +25,6 @@
 html,
 body {
   margin: 0;
-  min-width: 420px;
   background:
     radial-gradient(circle at top right, rgba(210, 106, 50, 0.18), transparent 34%),
     radial-gradient(circle at bottom left, rgba(30, 95, 141, 0.16), transparent 40%),
@@ -35,7 +34,9 @@ body {
 }
 
 body {
+  width: min(440px, 100vw);
   min-height: 600px;
+  overflow-x: hidden;
 }
 
 .shell {
@@ -43,6 +44,7 @@ body {
 }
 
 .hero,
+.filter-card,
 .panel,
 .meta-card {
   background: var(--panel);
@@ -53,7 +55,7 @@ body {
 
 .hero {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   align-items: end;
   padding: 20px;
@@ -66,6 +68,7 @@ body {
 
 .hero h1,
 .meta-card h2,
+.filter-card h3,
 .panel h3,
 .card-title {
   margin: 0;
@@ -106,6 +109,7 @@ body {
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 14px;
 }
@@ -127,7 +131,7 @@ body {
 }
 
 .button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.7;
 }
 
@@ -201,6 +205,7 @@ body {
 }
 
 .meta-card,
+.filter-card,
 .panel {
   margin-top: 14px;
   padding: 18px;
@@ -225,10 +230,73 @@ body {
 
 .panel-heading {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: end;
   gap: 14px;
   margin-bottom: 14px;
+}
+
+.filter-card {
+  position: sticky;
+  top: 14px;
+  z-index: 3;
+}
+
+.filter-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.filter-controls {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-pill {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(31, 38, 48, 0.08);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.filter-pill.is-active {
+  background: var(--brand);
+  color: #f7fbff;
+  box-shadow: 0 10px 20px rgba(20, 63, 97, 0.16);
+}
+
+.search-field {
+  display: block;
+}
+
+.search-field input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(31, 38, 48, 0.1);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink);
+  font: inherit;
+}
+
+.search-field input:focus {
+  outline: 2px solid rgba(30, 95, 141, 0.2);
+  border-color: rgba(30, 95, 141, 0.35);
+}
+
+.search-field input::placeholder {
+  color: var(--muted);
 }
 
 .panel-meta {
@@ -260,13 +328,18 @@ body {
 
 .card-top {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 12px;
   align-items: start;
 }
 
 .font-header {
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.card-top > div,
+.font-header > div {
+  min-width: 0;
 }
 
 .swatch {
@@ -279,6 +352,7 @@ body {
 
 .card-title {
   font-size: 18px;
+  overflow-wrap: anywhere;
 }
 
 .card-subtitle,
@@ -288,6 +362,7 @@ body {
 .link-list {
   color: var(--muted);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .chip-row {
@@ -295,6 +370,7 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+  max-width: 100%;
 }
 
 .chip {
@@ -306,6 +382,10 @@ body {
   color: var(--brand-strong);
   font-size: 12px;
   font-weight: 700;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .chip.metric {
@@ -359,4 +439,44 @@ body {
 
 .link-pill:hover {
   background: rgba(30, 95, 141, 0.14);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 420px) {
+  .shell {
+    padding: 14px;
+  }
+
+  .hero,
+  .summary {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-card strong {
+    font-size: 22px;
+  }
+
+  .card-top {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .font-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .copy-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
 }

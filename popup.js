@@ -1,18 +1,27 @@
 const state = {
   analysis: null,
-  scanInProgress: false
+  scanInProgress: false,
+  filters: {
+    view: "all",
+    query: ""
+  }
 };
 
 const dom = {
   scanButton: document.getElementById("scanButton"),
   copyThemeButton: document.getElementById("copyThemeButton"),
   copyJsonButton: document.getElementById("copyJsonButton"),
+  filterButtons: Array.from(document.querySelectorAll("[data-view-filter]")),
+  searchInput: document.getElementById("searchInput"),
+  filterSummary: document.getElementById("filterSummary"),
   statusMessage: document.getElementById("statusMessage"),
   colorCount: document.getElementById("colorCount"),
   fontCount: document.getElementById("fontCount"),
   elementCount: document.getElementById("elementCount"),
   pageTitle: document.getElementById("pageTitle"),
   pageLink: document.getElementById("pageLink"),
+  colorPanel: document.getElementById("colorPanel"),
+  fontPanel: document.getElementById("fontPanel"),
   paletteMeta: document.getElementById("paletteMeta"),
   fontMeta: document.getElementById("fontMeta"),
   colorList: document.getElementById("colorList"),
@@ -36,6 +45,16 @@ document.addEventListener("DOMContentLoaded", () => {
   dom.scanButton.addEventListener("click", () => void scanActivePage());
   dom.copyThemeButton.addEventListener("click", () => void copyThemeCss());
   dom.copyJsonButton.addEventListener("click", () => void copyJson());
+  dom.searchInput.addEventListener("input", handleSearchInput);
+  dom.filterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.filters.view = button.dataset.viewFilter || "all";
+      syncFilterControls();
+      applyFilters();
+    });
+  });
+  syncFilterControls();
+  setBusyState(false, dom.statusMessage.textContent);
   void scanActivePage();
 });
 
@@ -55,10 +74,7 @@ async function scanActivePage() {
 
     ensureSupportedUrl(tab.url);
 
-    const executionResults = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: analyzePage
-    });
+    const executionResults = await executePageAnalysis(tab.id, tab.url);
 
     const rawAnalysis = executionResults?.[0]?.result;
 
@@ -76,7 +92,7 @@ async function scanActivePage() {
     console.error(error);
     state.analysis = null;
     renderErrorState();
-    setBusyState(false, error.message || "Unable to scan this page.", true, false);
+    setBusyState(false, humanizeScanError(error), true, false);
   }
 }
 
@@ -87,6 +103,64 @@ function ensureSupportedUrl(url) {
   if (isBlocked) {
     throw new Error("Chrome restricts extensions from scanning internal browser pages. Open a normal website tab instead.");
   }
+
+  let parsedUrl;
+
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return;
+  }
+
+  const isChromeWebStore = parsedUrl.hostname === "chromewebstore.google.com"
+    || (parsedUrl.hostname === "chrome.google.com" && parsedUrl.pathname.startsWith("/webstore"));
+
+  if (isChromeWebStore) {
+    throw new Error("Chrome blocks extensions from scanning Chrome Web Store pages. Open the website you want to inspect in a normal tab.");
+  }
+}
+
+async function executePageAnalysis(tabId, tabUrl) {
+  try {
+    return await chrome.scripting.executeScript({
+      target: { tabId },
+      func: analyzePage
+    });
+  } catch (error) {
+    throw new Error(getScriptInjectionErrorMessage(error, tabUrl));
+  }
+}
+
+function getScriptInjectionErrorMessage(error, tabUrl) {
+  const message = String(error?.message || error || "");
+  const normalizedUrl = String(tabUrl || "");
+
+  if (normalizedUrl.startsWith("file:")) {
+    return "This is a local file tab. Enable 'Allow access to file URLs' in the extension details before scanning file:// pages.";
+  }
+
+  if (message.includes("Chrome Web Store") || message.includes("extensions gallery")) {
+    return "Chrome blocks extensions from scanning Chrome Web Store pages. Open the website you want to inspect in a normal tab.";
+  }
+
+  if (message.includes("Cannot access contents of url") || message.includes("Cannot access contents of the page")) {
+    return "Theme Scout cannot inject into this tab. Try a standard website page, or if this is a local file enable file URL access in the extension settings.";
+  }
+
+  if (message.includes("Frame with ID 0 is showing error page")) {
+    return "This tab is showing a browser error page, so there is nothing to scan yet. Reload the site and try again.";
+  }
+
+  if (message.includes("The tab was closed")) {
+    return "The active tab changed or closed during the scan. Reopen the page and try again.";
+  }
+
+  return message || "Unable to scan this page.";
+}
+
+function humanizeScanError(error) {
+  const message = String(error?.message || error || "");
+  return message || "Unable to scan this page.";
 }
 
 function setBusyState(isBusy, message, isError = false, isSuccess = false) {
@@ -94,6 +168,10 @@ function setBusyState(isBusy, message, isError = false, isSuccess = false) {
   dom.scanButton.disabled = isBusy;
   dom.copyThemeButton.disabled = isBusy || !state.analysis;
   dom.copyJsonButton.disabled = isBusy || !state.analysis;
+  dom.searchInput.disabled = isBusy || !state.analysis;
+  dom.filterButtons.forEach((button) => {
+    button.disabled = isBusy || !state.analysis;
+  });
   dom.scanButton.textContent = isBusy ? "Scanning..." : "Scan Page";
   dom.statusMessage.textContent = message;
   dom.statusMessage.className = "status";
@@ -114,8 +192,11 @@ function renderErrorState() {
   dom.pageTitle.textContent = "Scan unavailable";
   dom.pageLink.textContent = "Current tab";
   dom.pageLink.href = "#";
+  dom.filterSummary.textContent = "Scan a page to filter results";
   dom.paletteMeta.textContent = "No palette available";
   dom.fontMeta.textContent = "No font data available";
+  dom.colorPanel.hidden = false;
+  dom.fontPanel.hidden = false;
   dom.colorList.className = "list empty-state";
   dom.colorList.textContent = "Try scanning a standard website tab with visible text and styles.";
   dom.fontList.className = "list empty-state";
@@ -129,19 +210,15 @@ function renderAnalysis(analysis) {
   dom.pageTitle.textContent = analysis.meta.title;
   dom.pageLink.textContent = analysis.meta.url;
   dom.pageLink.href = analysis.meta.url;
-  dom.paletteMeta.textContent = `${analysis.colors.length} reusable values`;
-  dom.fontMeta.textContent = `${analysis.fonts.filter((font) => font.loaded).length} loaded font families detected`;
-
-  renderColorCards(analysis.colors);
-  renderFontCards(analysis.fonts);
+  applyFilters();
 }
 
-function renderColorCards(colors) {
+function renderColorCards(colors, emptyMessage = "No distinct colors were detected on this page.") {
   dom.colorList.innerHTML = "";
 
   if (!colors.length) {
     dom.colorList.className = "list empty-state";
-    dom.colorList.textContent = "No distinct colors were detected on this page.";
+    dom.colorList.textContent = emptyMessage;
     return;
   }
 
@@ -162,7 +239,7 @@ function renderColorCards(colors) {
     title.textContent = color.previewValue;
     subtitle.textContent = color.alpha < 1 ? `${color.hex} at ${Math.round(color.alpha * 100)}% opacity` : color.rgb;
     usage.textContent = `Used ${color.usageCount} times, mostly as ${color.dominantRole}.`;
-    selectorList.textContent = color.selectors.join(" • ");
+    selectorList.textContent = color.selectors.join(" | ");
     copyButton.addEventListener("click", () => void copyToClipboard(color.cssSnippet, `Copied ${color.previewValue} CSS.`));
 
     color.roles.forEach((role) => {
@@ -177,12 +254,12 @@ function renderColorCards(colors) {
   });
 }
 
-function renderFontCards(fonts) {
+function renderFontCards(fonts, emptyMessage = "No font styles were detected on this page.") {
   dom.fontList.innerHTML = "";
 
   if (!fonts.length) {
     dom.fontList.className = "list empty-state";
-    dom.fontList.textContent = "No font styles were detected on this page.";
+    dom.fontList.textContent = emptyMessage;
     return;
   }
 
@@ -205,7 +282,7 @@ function renderFontCards(fonts) {
     preview.style.fontFamily = font.stack;
     preview.textContent = font.sampleText || preview.textContent;
     usage.textContent = `Used ${font.usageCount} times${font.loaded ? " and currently loaded on the page." : "."}`;
-    selectorList.textContent = font.selectors.join(" • ");
+    selectorList.textContent = font.selectors.join(" | ");
     copyButton.addEventListener("click", () => void copyToClipboard(font.cssSnippet, `Copied CSS for ${font.primaryFamily}.`));
 
     font.metrics.forEach((metric) => {
@@ -257,6 +334,158 @@ async function copyToClipboard(text, successMessage) {
     console.error(error);
     setBusyState(false, "Clipboard access failed. Chrome may have blocked the copy request.", true, false);
   }
+}
+
+function handleSearchInput(event) {
+  state.filters.query = String(event.target.value || "").trim().toLowerCase();
+  applyFilters();
+}
+
+function syncFilterControls() {
+  dom.filterButtons.forEach((button) => {
+    const isActive = button.dataset.viewFilter === state.filters.view;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function applyFilters() {
+  syncFilterControls();
+
+  if (!state.analysis) {
+    return;
+  }
+
+  const filteredResults = getFilteredResults(state.analysis);
+  const totalColors = state.analysis.colors.length;
+  const totalFonts = state.analysis.fonts.length;
+  const totalLoadedFonts = state.analysis.fonts.filter((font) => font.loaded).length;
+
+  dom.filterSummary.textContent = buildFilterSummary(filteredResults, totalColors, totalFonts);
+  dom.paletteMeta.textContent = buildPanelMeta(filteredResults.colors.length, totalColors, "colour", "colours");
+  dom.fontMeta.textContent = buildFontMeta(filteredResults.fonts.length, totalFonts, totalLoadedFonts);
+  dom.colorPanel.hidden = !filteredResults.showColors;
+  dom.fontPanel.hidden = !filteredResults.showFonts;
+
+  if (filteredResults.showColors) {
+    renderColorCards(filteredResults.colors, "No colours match the current filters.");
+  }
+
+  if (filteredResults.showFonts) {
+    renderFontCards(filteredResults.fonts, "No fonts match the current filters.");
+  }
+}
+
+function getFilteredResults(analysis) {
+  const query = state.filters.query;
+  const showColors = state.filters.view === "all" || state.filters.view === "colors";
+  const showFonts = state.filters.view === "all" || state.filters.view === "fonts" || state.filters.view === "loaded-fonts";
+
+  const colors = showColors
+    ? analysis.colors.filter((color) => matchesColorFilter(color, query))
+    : [];
+
+  let fonts = showFonts
+    ? analysis.fonts.filter((font) => matchesFontFilter(font, query))
+    : [];
+
+  if (state.filters.view === "loaded-fonts") {
+    fonts = fonts.filter((font) => font.loaded);
+  }
+
+  return {
+    colors,
+    fonts,
+    showColors,
+    showFonts
+  };
+}
+
+function matchesColorFilter(color, query) {
+  if (!query) {
+    return true;
+  }
+
+  const searchBlob = [
+    color.previewValue,
+    color.hex,
+    color.rgb,
+    color.dominantRole,
+    color.roles.join(" "),
+    color.selectors.join(" ")
+  ].join(" ").toLowerCase();
+
+  return searchBlob.includes(query);
+}
+
+function matchesFontFilter(font, query) {
+  if (!query) {
+    return true;
+  }
+
+  const searchBlob = [
+    font.primaryFamily,
+    font.stack,
+    font.metrics.join(" "),
+    font.selectors.join(" "),
+    font.loaded ? "loaded" : "not-loaded",
+    font.loadedLinks.map((linkInfo) => `${linkInfo.label} ${linkInfo.url}`).join(" ")
+  ].join(" ").toLowerCase();
+
+  return searchBlob.includes(query);
+}
+
+function buildFilterSummary(filteredResults, totalColors, totalFonts) {
+  const queryActive = Boolean(state.filters.query);
+
+  if (state.filters.view === "colors") {
+    return queryActive
+      ? `Showing ${filteredResults.colors.length} of ${totalColors} colours`
+      : `Showing all ${totalColors} colours`;
+  }
+
+  if (state.filters.view === "fonts") {
+    return queryActive
+      ? `Showing ${filteredResults.fonts.length} of ${totalFonts} fonts`
+      : `Showing all ${totalFonts} fonts`;
+  }
+
+  if (state.filters.view === "loaded-fonts") {
+    return queryActive
+      ? `Showing ${filteredResults.fonts.length} loaded fonts`
+      : "Showing loaded fonts only";
+  }
+
+  if (queryActive) {
+    return `Showing ${filteredResults.colors.length} colours and ${filteredResults.fonts.length} fonts`;
+  }
+
+  return `Browsing ${totalColors} colours and ${totalFonts} fonts`;
+}
+
+function buildPanelMeta(visibleCount, totalCount, singularLabel, pluralLabel) {
+  if (visibleCount === totalCount) {
+    return `${totalCount} reusable ${pluralLabel}`;
+  }
+
+  const label = visibleCount === 1 ? singularLabel : pluralLabel;
+  return `${visibleCount} of ${totalCount} ${label}`;
+}
+
+function buildFontMeta(visibleCount, totalCount, loadedCount) {
+  if (state.filters.view === "loaded-fonts") {
+    if (visibleCount === loadedCount) {
+      return `${loadedCount} loaded font families`;
+    }
+
+    return `${visibleCount} of ${loadedCount} loaded font families`;
+  }
+
+  if (visibleCount === totalCount) {
+    return `${loadedCount} loaded font families detected`;
+  }
+
+  return `${visibleCount} of ${totalCount} font stacks`;
 }
 
 function formatAnalysis(analysis, tab) {
