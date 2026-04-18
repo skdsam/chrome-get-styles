@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Theme Scout",
+  "description": "Scan the current page for reusable colors, font styles, and loaded font sources.",
+  "version": "1.0.0",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "Theme Scout",
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "16": "assets/icons/theme-scout-16.png",
+    "32": "assets/icons/theme-scout-32.png",
+    "48": "assets/icons/theme-scout-48.png",
+    "128": "assets/icons/theme-scout-128.png"
+  }
+}

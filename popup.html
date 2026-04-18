@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Theme Scout</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Design Token Extractor</p>
+          <h1>Theme Scout</h1>
+          <p class="hero-text">
+            Pull the page palette, font stacks, and loaded font links from the active tab.
+          </p>
+        </div>
+        <button id="scanButton" class="button primary" type="button">Scan Page</button>
+      </section>
+
+      <section class="toolbar">
+        <button id="copyThemeButton" class="button subtle" type="button">Copy Theme CSS</button>
+        <button id="copyJsonButton" class="button subtle" type="button">Copy JSON</button>
+      </section>
+
+      <p id="statusMessage" class="status" role="status" aria-live="polite">
+        Open any site and scan it to capture colors and typography.
+      </p>
+
+      <section class="summary" id="summaryPanel">
+        <article class="summary-card">
+          <span class="summary-label">Colors</span>
+          <strong id="colorCount">0</strong>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Fonts</span>
+          <strong id="fontCount">0</strong>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Elements</span>
+          <strong id="elementCount">0</strong>
+        </article>
+      </section>
+
+      <section class="meta-card">
+        <p class="meta-eyebrow">Page</p>
+        <h2 id="pageTitle">Not scanned yet</h2>
+        <a id="pageLink" href="#" target="_blank" rel="noreferrer noopener">Current tab</a>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-eyebrow">Colour Theme</p>
+            <h3>Palette</h3>
+          </div>
+          <span id="paletteMeta" class="panel-meta">No scan yet</span>
+        </div>
+        <div id="colorList" class="list empty-state">
+          Colors from text, backgrounds, borders, and SVG fills will appear here.
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-eyebrow">Typography</p>
+            <h3>Fonts</h3>
+          </div>
+          <span id="fontMeta" class="panel-meta">No scan yet</span>
+        </div>
+        <div id="fontList" class="list empty-state">
+          Font stacks, CSS declarations, and detected source links will appear here.
+        </div>
+      </section>
+    </main>
+
+    <template id="colorCardTemplate">
+      <article class="card color-card">
+        <div class="card-top">
+          <span class="swatch"></span>
+          <div>
+            <h4 class="card-title"></h4>
+            <p class="card-subtitle"></p>
+          </div>
+          <button class="button ghost copy-button" type="button">Copy CSS</button>
+        </div>
+        <div class="chip-row roles"></div>
+        <p class="usage"></p>
+        <p class="selector-label">Seen on</p>
+        <p class="selector-list"></p>
+      </article>
+    </template>
+
+    <template id="fontCardTemplate">
+      <article class="card font-card">
+        <div class="card-top font-header">
+          <div>
+            <h4 class="card-title"></h4>
+            <p class="card-subtitle"></p>
+          </div>
+          <button class="button ghost copy-button" type="button">Copy CSS</button>
+        </div>
+        <p class="font-preview">The quick brown fox jumps over the lazy dog.</p>
+        <div class="chip-row metrics"></div>
+        <p class="usage"></p>
+        <p class="selector-label">Selectors</p>
+        <p class="selector-list"></p>
+        <div class="link-block">
+          <p class="selector-label">Loaded font links</p>
+          <div class="link-list"></div>
+        </div>
+      </article>
+    </template>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
